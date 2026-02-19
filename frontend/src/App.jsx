@@ -86,7 +86,8 @@ function App() {
     setLoading(true);
 
     try {
-      const chatHistory = [...messages, userMsg].slice(-6).map(m => ({ role: m.role, content: m.content }));
+      // Send ONLY previous history, not the current message
+      const chatHistory = messages.slice(-6).map(m => ({ role: m.role, content: m.content }));
       const { data } = await axios.post(`${API_BASE}/chat`, { question, chat_history: chatHistory });
 
       const botMessage = {
@@ -220,8 +221,8 @@ function App() {
                   <div className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'} max-w-[80%]`}>
                     <div
                       className={`px-6 py-4 rounded-2xl text-[0.95rem] leading-relaxed shadow-sm ${msg.role === 'user'
-                          ? 'bg-blue-600 text-white rounded-br-sm'
-                          : 'glass-panel text-slate-200 rounded-tl-sm border-slate-700/50'
+                        ? 'bg-blue-600 text-white rounded-br-sm'
+                        : 'glass-panel text-slate-200 rounded-tl-sm border-slate-700/50'
                         }`}
                     >
                       {msg.content}
