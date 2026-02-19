@@ -1,4 +1,5 @@
 import os
+import re
 from dotenv import load_dotenv
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 from langchain_pinecone import PineconeVectorStore
@@ -61,9 +62,49 @@ rag_chain = create_retrieval_chain(retriever, question_answer_chain)
 #         "answer": response["answer"],
 #         "sources": [doc.metadata.get("source") for doc in response["context"]]
 #     }
-def get_answer(question: str):
-    # First, get the chain's answer (keeps existing behavior)
-    response = rag_chain.invoke({"input": question})
+def get_answer(question: str, chat_history: list = None):
+    # Clarification guard: if question contains pronouns but no chat_history, ask for clarification
+    pronoun_re = re.compile(r"\b(he|she|they|his|her|them|him|it|its)\b", re.I)
+    if pronoun_re.search(question) and not chat_history:
+        return {"answer": "I don't have enough context to determine who you're referring to. Please mention the person's name or provide prior messages.", "sources": []}
+
+    # If chat_history is provided, attempt to rewrite the question into a standalone query
+    used_question = question
+    try:
+        if chat_history:
+            # Build a concise rewrite prompt that resolves pronouns and context
+            history_text = "\n".join([
+                f"User: {m['content']}" if m.get('role') == 'user' else f"Assistant: {m.get('content', '')}"
+                for m in chat_history[-6:]
+            ])
+            rewrite_prompt = (
+                "Rewrite the last user question into a standalone question using the conversation context. "
+                "Only output the rewritten question.\n\n"
+                f"Conversation:\n{history_text}\nLast question: {question}\nRewritten question:"
+            )
+            rewrite_resp = llm.invoke(rewrite_prompt)
+
+            if isinstance(rewrite_resp, dict):
+                rewritten = rewrite_resp.get("output") or rewrite_resp.get("answer") or rewrite_resp.get("text") or None
+            elif hasattr(rewrite_resp, 'content'):
+                rewritten = rewrite_resp.content
+            else:
+                rewritten = str(rewrite_resp)
+
+            if rewritten:
+                rewritten = rewritten.strip().strip('"')
+                if len(rewritten) > 0:
+                    used_question = rewritten
+                    # If rewrite still contains pronouns, ask for clarification instead of proceeding
+                    if pronoun_re.search(used_question):
+                        return {"answer": "I couldn't determine who that pronoun refers to from the conversation. Could you rephrase with the name?", "sources": []}
+    except Exception:
+        # If rewriting fails, fall back to the original question
+        used_question = question
+
+
+    # First, get the chain's answer (keeps existing behavior) using the (possibly) rewritten question
+    response = rag_chain.invoke({"input": used_question})
 
     # Try HyDE: generate a short hypothetical excerpt using the LLM,
     # then use that hypothetical text to retrieve better sources from the vectorstore.
@@ -71,15 +112,11 @@ def get_answer(question: str):
         # Build a concise HyDE prompt
         hyde_prompt = (
             "Write a concise factual excerpt (1-2 sentences) that would directly answer the "
-            f"question: \"{question}\". Provide only factual content, no commentary."
+            f"question: \"{used_question}\". Provide only factual content, no commentary."
         )
 
         # Generate hypothetical excerpt (may return different shapes depending on LLM wrapper)
-        try:
-            hyde_resp = llm.invoke({"input": hyde_prompt})
-        except Exception:
-            # Some runtimes may implement __call__ instead
-            hyde_resp = llm(hyde_prompt)
+        hyde_resp = llm.invoke(hyde_prompt)
 
         # Extract text from possible response types
         if isinstance(hyde_resp, dict):

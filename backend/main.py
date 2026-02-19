@@ -1,5 +1,6 @@
 import os
 import shutil
+from typing import List, Optional
 from fastapi import FastAPI, UploadFile, File
 from ingestion import process_pdf
 from pydantic import BaseModel
@@ -7,8 +8,10 @@ from rag_engine import get_answer
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi import HTTPException
 
+
 class QuestionRequest(BaseModel):
     question: str
+    chat_history: Optional[List[dict]] = None
 
 app = FastAPI()
 
@@ -58,7 +61,8 @@ def read_root():
 @app.post("/chat")
 async def chat_with_pdf(request: QuestionRequest):
     try:
-        response = get_answer(request.question)
+        # Pass optional chat_history for question rewriting (follow-ups)
+        response = get_answer(request.question, chat_history=request.chat_history)
         # Ensure sources are included in the response
         return {
             "answer": response.get("answer", ""),

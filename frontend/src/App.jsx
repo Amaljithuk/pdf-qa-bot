@@ -37,10 +37,11 @@ function App() {
     
     if (e.dataTransfer.files && e.dataTransfer.files[0]) {
       const droppedFile = e.dataTransfer.files[0];
-      if (droppedFile.type === "application/pdf") {
+      const allowed = /\.(pdf|docx|txt)$/i;
+      if (allowed.test(droppedFile.name)) {
         setFile(droppedFile);
       } else {
-        alert("Please drop a PDF file");
+        alert("Please drop a PDF, DOCX, or TXT file");
       }
     }
   };
@@ -53,14 +54,14 @@ function App() {
   };
 
   const handleUpload = async () => {
-    if (!file) return alert("Select a PDF first");
+    if (!file) return alert("Select a file first");
     setUploading(true);
     const formData = new FormData();
     formData.append("file", file);
 
     try {
       await axios.post(`${API_BASE}/upload`, formData);
-      alert("PDF Indexed successfully!");
+      alert("File indexed successfully!");
     } catch (err) {
       console.error(err);
       alert("Upload failed");
@@ -79,7 +80,9 @@ function App() {
     setLoading(true);
 
     try {
-      const { data } = await axios.post(`${API_BASE}/chat`, { question });
+      // include last 6 turns of chat history (including this user message)
+      const chatHistory = [...messages, userMsg].slice(-6).map(m => ({ role: m.role, content: m.content }));
+      const { data } = await axios.post(`${API_BASE}/chat`, { question, chat_history: chatHistory });
       const botMessage = { 
         role: "bot", 
         content: data.answer,
@@ -97,7 +100,7 @@ function App() {
     <div className="h-screen flex flex-col bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
       <div className="bg-gradient-to-r from-slate-900 to-slate-800 border-b border-gray-700 px-8 py-6">
         <h1 className="app-title text-4xl font-bold mb-1">RAG Document Assistant</h1>
-        <p className="text-gray-400 text-sm tracking-wider">Retrieval-Augmented Generation for Intelligent PDF Q&A</p>
+        <p className="text-gray-400 text-sm tracking-wider">Retrieval-Augmented Generation for Intelligent Document Q&A</p>
       </div>
 
       <div className="flex-1 flex flex-col items-center justify-start p-8 overflow-hidden">
@@ -113,7 +116,7 @@ function App() {
             <div className="flex items-center gap-4 w-full">
               <input 
                 type="file" 
-                accept=".pdf" 
+                accept=".pdf,.docx,.txt,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain" 
                 onChange={(e) => setFile(e.target.files[0])}
                 className="block flex-1 text-sm text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-gradient-to-r file:from-blue-600 file:to-blue-700 file:text-white hover:file:bg-gradient-to-r hover:file:from-blue-700 hover:file:to-blue-800 cursor-pointer"
               />
@@ -126,8 +129,8 @@ function App() {
                 Upload
               </button>
             </div>
-            {!file && <p className="text-gray-500 text-sm">or drag and drop your PDF here</p>}
-            {file && <p className="text-blue-400 text-sm">✅ {file.name}</p>}
+            {!file && <p className="text-gray-500 text-sm">or drag and drop a PDF, DOCX or TXT file here</p>}
+            {file && <p className="text-blue-400 text-sm">✅ {file.name} ({file.type || file.name.split('.').pop()})</p>}
           </div>
         </div>
 
@@ -141,7 +144,7 @@ function App() {
             <div className="h-full flex items-center justify-center text-gray-500">
               <div className="text-center">
                 <FileText size={48} className="mx-auto mb-4 opacity-30" />
-                <p>Upload a PDF and ask questions to get started...</p>
+                <p>Upload a file (PDF, DOCX, or TXT) and ask questions to get started...</p>
               </div>
             </div>
           )}
@@ -203,7 +206,7 @@ function App() {
           <input 
             value={question}
             onChange={(e) => setQuestion(e.target.value)}
-            placeholder="Ask something about the PDF..."
+            placeholder="Ask something about the document..."
             className="chat-input flex-1 bg-gray-800 border border-gray-600 rounded-xl px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           />
           <button type="submit" className="send-btn bg-blue-600 p-3 rounded-xl hover:bg-blue-700 text-white transition flex items-center justify-center">
