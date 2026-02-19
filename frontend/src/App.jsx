@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import axios from 'axios';
-import { Send, Upload, FileText, Loader2, Copy, Check, User, Bot } from 'lucide-react';
+import { Send, Upload, FileText, Loader2, Copy, Check, MessageSquare, Sparkles, X } from 'lucide-react';
 
 const API_BASE = "http://127.0.0.1:8000";
 
@@ -34,7 +34,7 @@ function App() {
     e.preventDefault();
     e.stopPropagation();
     setDragActive(false);
-    
+
     if (e.dataTransfer.files && e.dataTransfer.files[0]) {
       const droppedFile = e.dataTransfer.files[0];
       const allowed = /\.(pdf|docx|txt)$/i;
@@ -53,6 +53,11 @@ function App() {
     setTimeout(() => setCopiedId(null), 2000);
   };
 
+  const clearFile = () => {
+    setFile(null);
+    setMessages([]);
+  };
+
   const handleUpload = async () => {
     if (!file) return alert("Select a file first");
     setUploading(true);
@@ -61,7 +66,8 @@ function App() {
 
     try {
       await axios.post(`${API_BASE}/upload`, formData);
-      alert("File indexed successfully!");
+      // Add a system welcome message after successful upload
+      setMessages([{ role: "bot", content: `I've successfully indexed **${file.name}**. You can now ask me questions about it!`, sources: [] }]);
     } catch (err) {
       console.error(err);
       alert("Upload failed");
@@ -80,11 +86,11 @@ function App() {
     setLoading(true);
 
     try {
-      // include last 6 turns of chat history (including this user message)
       const chatHistory = [...messages, userMsg].slice(-6).map(m => ({ role: m.role, content: m.content }));
       const { data } = await axios.post(`${API_BASE}/chat`, { question, chat_history: chatHistory });
-      const botMessage = { 
-        role: "bot", 
+
+      const botMessage = {
+        role: "bot",
         content: data.answer,
         sources: data.sources || []
       };
@@ -97,123 +103,207 @@ function App() {
   };
 
   return (
-    <div className="h-screen flex flex-col bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
-      <div className="bg-gradient-to-r from-slate-900 to-slate-800 border-b border-gray-700 px-8 py-6">
-        <h1 className="app-title text-4xl font-bold mb-1">RAG Document Assistant</h1>
-        <p className="text-gray-400 text-sm tracking-wider">Retrieval-Augmented Generation for Intelligent Document Q&A</p>
-      </div>
+    <div className="flex h-screen w-full bg-[#0f172a] text-white font-sans overflow-hidden">
 
-      <div className="flex-1 flex flex-col items-center justify-start p-8 overflow-hidden">
-        {/* Upload Section */}
-        <div 
-          className={`upload-section bg-gradient-to-br from-gray-800 to-gray-900 p-8 rounded-2xl w-full max-w-4xl mb-6 border-2 transition-all cursor-pointer ${dragActive ? 'border-blue-400 bg-blue-900/20' : 'border-gray-700 hover:border-blue-500'} shadow-xl`}
-          onDragEnter={handleDrag}
-          onDragLeave={handleDrag}
-          onDragOver={handleDrag}
-          onDrop={handleDrop}
-        >
-          <div className="flex flex-col items-center gap-4">
-            <div className="flex items-center gap-4 w-full">
-              <input 
-                type="file" 
-                accept=".pdf,.docx,.txt,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain" 
-                onChange={(e) => setFile(e.target.files[0])}
-                className="block flex-1 text-sm text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-gradient-to-r file:from-blue-600 file:to-blue-700 file:text-white hover:file:bg-gradient-to-r hover:file:from-blue-700 hover:file:to-blue-800 cursor-pointer"
-              />
-              <button 
-                onClick={handleUpload}
-                disabled={uploading}
-                className="upload-btn flex items-center gap-2 bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white px-6 py-2 rounded-lg whitespace-nowrap font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {uploading ? <Loader2 className="animate-spin" size={18} /> : <Upload size={18} />}
-                Upload
-              </button>
+      {/* Sidebar */}
+      <div className="w-80 flex flex-col border-r border-white/5 bg-slate-900/50 backdrop-blur-sm relative z-10">
+
+        {/* Header / Logo */}
+        <div className="p-6 border-b border-white/5">
+          <div className="flex items-center gap-3 mb-2">
+            <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center shadow-lg shadow-blue-500/20">
+              <Sparkles className="text-white w-5 h-5" />
             </div>
-            {!file && <p className="text-gray-500 text-sm">or drag and drop a PDF, DOCX or TXT file here</p>}
-            {file && <p className="text-blue-400 text-sm">✅ {file.name} ({file.type || file.name.split('.').pop()})</p>}
+            <h1 className="text-lg font-bold tracking-tight">DocQuery AI</h1>
           </div>
+          <p className="text-xs text-slate-400 leading-relaxed">
+            Upload your documents and chat with them using advanced RAG technology.
+          </p>
         </div>
 
-        {/* Chat Section */}
-        <div className="chat-container bg-gradient-to-b from-gray-800 to-gray-900 rounded-2xl w-full max-w-4xl flex flex-col flex-1 border border-gray-700 overflow-hidden">
-        <div className="bg-gradient-to-r from-gray-800 to-gray-700 px-6 py-4 border-b border-gray-700">
-          <h2 className="text-lg font-semibold text-blue-400">Conversation</h2>
-        </div>
-        <div className="flex-1 overflow-y-auto p-6 space-y-4 scrollbar-thin scrollbar-thumb-gray-700 scrollbar-track-gray-800">
-          {messages.length === 0 && (
-            <div className="h-full flex items-center justify-center text-gray-500">
+        {/* File Upload Area */}
+        <div className="p-6 flex-1 flex flex-col">
+          <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-4">Source Material</h2>
+
+          {!file ? (
+            <div
+              className={`flex-1 border-2 border-dashed rounded-xl flex flex-col items-center justify-center text-center p-6 transition-all duration-200 ${dragActive ? 'border-blue-500 bg-blue-500/10' : 'border-slate-700 hover:border-slate-600 hover:bg-slate-800/50'}`}
+              onDragEnter={handleDrag}
+              onDragLeave={handleDrag}
+              onDragOver={handleDrag}
+              onDrop={handleDrop}
+            >
+              <div className="w-12 h-12 rounded-full bg-slate-800 flex items-center justify-center mb-4">
+                <Upload className="w-6 h-6 text-slate-400" />
+              </div>
+              <p className="text-sm font-medium text-slate-300 mb-1">Drag file here</p>
+              <p className="text-xs text-slate-500 mb-4">PDF, DOCX, or TXT</p>
+              <label className="cursor-pointer">
+                <input
+                  type="file"
+                  className="hidden"
+                  accept=".pdf,.docx,.txt"
+                  onChange={(e) => setFile(e.target.files[0])}
+                />
+                <span className="px-4 py-2 bg-slate-800 hover:bg-slate-700 rounded-lg text-xs font-medium text-blue-400 transition-colors">
+                  Browse Files
+                </span>
+              </label>
+            </div>
+          ) : (
+            <div className="animate-fade-in">
+              <div className="glass-panel p-4 rounded-xl mb-4 relative group">
+                <button
+                  onClick={clearFile}
+                  className="absolute top-2 right-2 p-1 rounded-full bg-slate-800/50 hover:bg-red-500/20 hover:text-red-400 text-slate-400 opacity-0 group-hover:opacity-100 transition-all"
+                >
+                  <X size={14} />
+                </button>
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="w-10 h-10 rounded-lg bg-blue-500/20 flex items-center justify-center">
+                    <FileText className="text-blue-400 w-5 h-5" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium truncate text-slate-200">{file.name}</p>
+                    <p className="text-xs text-slate-500">{(file.size / 1024 / 1024).toFixed(2)} MB</p>
+                  </div>
+                </div>
+                <button
+                  onClick={handleUpload}
+                  disabled={uploading}
+                  className="w-full py-2 bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold rounded-lg transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-blue-900/20"
+                >
+                  {uploading ? <Loader2 className="animate-spin w-4 h-4" /> : "Process File"}
+                </button>
+              </div>
               <div className="text-center">
-                <FileText size={48} className="mx-auto mb-4 opacity-30" />
-                <p>Upload a file (PDF, DOCX, or TXT) and ask questions to get started...</p>
+                <p className="text-xs text-slate-500">Ready to chat once processed.</p>
               </div>
             </div>
           )}
-          {messages.map((msg, i) => (
-            <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'} gap-3`}>
-              {msg.role === 'bot' && (
-                <div className="flex-shrink-0 w-8 h-8 rounded-full bg-gradient-to-br from-blue-600 to-blue-700 flex items-center justify-center">
-                  <Bot size={18} className="text-white" />
-                </div>
-              )}
-              <div className={`max-w-[70%] group`}>
-                <div className={`p-4 rounded-xl text-sm leading-relaxed ${msg.role === 'user' ? 'user-message text-white' : 'bot-message text-gray-100'}`}>
-                  {msg.content}
-                  {msg.role === 'bot' && msg.sources && msg.sources.length > 0 && (
-                    <div className="citation-container">
-                      <div className="text-xs font-semibold text-gray-400 mb-2 mt-3">📄 Sources:</div>
-                      <div className="flex flex-wrap gap-2">
+        </div>
+
+        {/* Footer */}
+        <div className="p-6 border-t border-white/5">
+          <div className="flex items-center gap-2 text-xs text-slate-500">
+            <div className="w-2 h-2 rounded-full bg-green-500"></div>
+            <span>System Operational</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Main Chat Area */}
+      <div className="flex-1 flex flex-col relative">
+        <div className="absolute inset-0 bg-gradient-to-b from-blue-500/5 to-transparent pointer-events-none"></div>
+
+        {/* Chat History */}
+        <div className="flex-1 overflow-y-auto p-8 space-y-8 scroll-smooth" id="chat-container">
+          {messages.length === 0 ? (
+            <div className="h-full flex flex-col items-center justify-center text-center p-8 opacity-50">
+              <div className="w-24 h-24 rounded-2xl bg-slate-800/50 flex items-center justify-center mb-6 ring-1 ring-white/5">
+                <MessageSquare className="w-10 h-10 text-slate-600" />
+              </div>
+              <h3 className="text-xl font-semibold text-slate-300 mb-2">Start a new conversation</h3>
+              <p className="text-slate-500 max-w-sm">Upload a document from the sidebar and ask questions to extract insights.</p>
+            </div>
+          ) : (
+            <>
+              {messages.map((msg, i) => (
+                <div key={i} className={`flex gap-4 max-w-3xl mx-auto animate-fade-in ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+
+                  {msg.role === 'bot' && (
+                    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex-shrink-0 flex items-center justify-center shadow-lg shadow-purple-500/20 mt-1">
+                      <Sparkles size={14} className="text-white" />
+                    </div>
+                  )}
+
+                  <div className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'} max-w-[80%]`}>
+                    <div
+                      className={`px-6 py-4 rounded-2xl text-[0.95rem] leading-relaxed shadow-sm ${msg.role === 'user'
+                          ? 'bg-blue-600 text-white rounded-br-sm'
+                          : 'glass-panel text-slate-200 rounded-tl-sm border-slate-700/50'
+                        }`}
+                    >
+                      {msg.content}
+                    </div>
+
+                    {/* Sources (Only for bot) */}
+                    {msg.role === 'bot' && msg.sources && msg.sources.length > 0 && (
+                      <div className="mt-3 flex flex-wrap gap-2 animate-fade-in delay-100">
                         {msg.sources.map((source, idx) => (
-                          <span key={idx} className="citation-item">
+                          <div key={idx} className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-slate-800/60 border border-white/5 text-[10px] text-slate-400 font-medium hover:bg-slate-800 hover:text-slate-300 transition-colors cursor-default">
+                            <span>📄</span>
                             {source}
-                          </span>
+                          </div>
                         ))}
+                      </div>
+                    )}
+
+                    {/* Actions */}
+                    {msg.role === 'bot' && (
+                      <div className="flex items-center gap-2 mt-2 ml-1">
+                        <button
+                          onClick={() => copyToClipboard(msg.content, i)}
+                          className="text-xs text-slate-500 hover:text-slate-300 transition-colors flex items-center gap-1"
+                        >
+                          {copiedId === i ? <Check size={12} className="text-green-400" /> : <Copy size={12} />}
+                          {copiedId === i ? 'Copied' : 'Copy'}
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
+                  {msg.role === 'user' && (
+                    <div className="w-8 h-8 rounded-full bg-slate-700 flex-shrink-0 flex items-center justify-center mt-1">
+                      <div className="w-full h-full rounded-full overflow-hidden bg-gradient-to-tr from-slate-600 to-slate-500 flex items-center justify-center text-xs font-bold text-white">
+                        U
                       </div>
                     </div>
                   )}
                 </div>
-                {msg.role === 'bot' && (
-                  <button
-                    onClick={() => copyToClipboard(msg.content, i)}
-                    className="mt-2 text-gray-400 hover:text-gray-200 transition flex items-center gap-1 text-xs opacity-0 group-hover:opacity-100"
-                  >
-                    {copiedId === i ? <Check size={14} className="text-green-400" /> : <Copy size={14} />}
-                    {copiedId === i ? 'Copied!' : 'Copy'}
-                  </button>
-                )}
-              </div>
-              {msg.role === 'user' && (
-                <div className="flex-shrink-0 w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center">
-                  <User size={18} className="text-white" />
+              ))}
+
+              {loading && (
+                <div className="flex gap-4 max-w-3xl mx-auto animate-fade-in">
+                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex-shrink-0 flex items-center justify-center shadow-lg shadow-purple-500/20">
+                    <Sparkles size={14} className="text-white" />
+                  </div>
+                  <div className="glass-panel px-4 py-3 rounded-2xl rounded-tl-sm flex items-center gap-1">
+                    <div className="w-2 h-2 bg-slate-400 rounded-full typing-dot"></div>
+                    <div className="w-2 h-2 bg-slate-400 rounded-full typing-dot"></div>
+                    <div className="w-2 h-2 bg-slate-400 rounded-full typing-dot"></div>
+                  </div>
                 </div>
               )}
-            </div>
-          ))}
-          {loading && (
-            <div className="flex justify-start gap-3">
-              <div className="flex-shrink-0 w-8 h-8 rounded-full bg-gradient-to-br from-blue-600 to-blue-700 flex items-center justify-center">
-                <Bot size={18} className="text-white" />
-              </div>
-              <div className="flex items-center gap-2 bg-gray-700 text-gray-200 p-4 rounded-xl">
-                <Loader2 className="animate-spin" size={18} />
-                <span className="text-sm">Thinking...</span>
-              </div>
-            </div>
+              <div ref={messagesEndRef} className="h-4" />
+            </>
           )}
-          <div ref={messagesEndRef} />
         </div>
 
-        <form onSubmit={handleChat} className="p-4 bg-gradient-to-r from-gray-900 to-gray-800 border-t border-gray-700 flex gap-3">
-          <input 
-            value={question}
-            onChange={(e) => setQuestion(e.target.value)}
-            placeholder="Ask something about the document..."
-            className="chat-input flex-1 bg-gray-800 border border-gray-600 rounded-xl px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-          />
-          <button type="submit" className="send-btn bg-blue-600 p-3 rounded-xl hover:bg-blue-700 text-white transition flex items-center justify-center">
-            <Send size={20} />
-          </button>
-        </form>
+        {/* Input Area */}
+        <div className="p-6 bg-slate-950/80 backdrop-blur-md border-t border-white/5">
+          <div className="max-w-3xl mx-auto">
+            <form onSubmit={handleChat} className="relative group">
+              <input
+                value={question}
+                onChange={(e) => setQuestion(e.target.value)}
+                placeholder="Ask me anything about the document..."
+                className="w-full glass-input px-5 py-4 pr-16 rounded-xl text-sm placeholder-slate-500 text-white shadow-lg focus:shadow-blue-500/10 outline-none"
+              />
+              <button
+                type="submit"
+                disabled={!question.trim() || loading}
+                className="absolute right-2 top-2 p-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg transition-all disabled:opacity-0 disabled:scale-90 shadow-lg shadow-blue-600/20"
+              >
+                <Send size={18} />
+              </button>
+            </form>
+            <p className="text-center text-[10px] text-slate-600 mt-3 font-medium">
+              AI can make mistakes. Verify important information.
+            </p>
+          </div>
         </div>
+
       </div>
     </div>
   );

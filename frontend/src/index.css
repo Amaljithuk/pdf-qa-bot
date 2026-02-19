@@ -1,53 +1,20 @@
 
 @import "tailwindcss";
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
 
 :root {
-  font-family: 'Segoe UI', system-ui, Avenir, Helvetica, Arial, sans-serif;
+  font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
   line-height: 1.6;
   font-weight: 400;
 
   color-scheme: dark;
-  color: rgba(255, 255, 255, 0.9);
-  background: linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%);
-  background-attachment: fixed;
-
+  color: rgba(255, 255, 255, 0.92);
+  background-color: #0f172a; /* Slate 900 fallback */
+  
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  scrollbar-width: thin;
-  scrollbar-color: rgba(59, 130, 246, 0.5) transparent;
-}
-
-/* Scrollbar styling */
-::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
-}
-
-::-webkit-scrollbar-track {
-  background: rgba(30, 41, 59, 0.5);
-}
-
-::-webkit-scrollbar-thumb {
-  background: rgba(59, 130, 246, 0.5);
-  border-radius: 4px;
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background: rgba(59, 130, 246, 0.7);
-}
-
-a {
-  font-weight: 500;
-  color: #60a5fa;
-  text-decoration: none;
-  transition: color 0.3s ease;
-}
-
-a:hover {
-  color: #93c5fd;
-  text-decoration: underline;
 }
 
 body {
@@ -55,67 +22,54 @@ body {
   padding: 0;
   min-width: 320px;
   min-height: 100vh;
-  background: inherit;
+  @apply bg-slate-950 text-slate-200;
 }
 
-h1 {
-  font-size: 3.2em;
-  line-height: 1.1;
-  margin: 0;
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
 }
 
-button {
-  border-radius: 8px;
-  border: none;
-  padding: 0.6em 1.2em;
-  font-size: 1em;
-  font-weight: 500;
-  font-family: inherit;
-  background-color: #1e293b;
-  color: white;
-  cursor: pointer;
-  transition: all 0.25s ease;
+::-webkit-scrollbar-track {
+  background: transparent;
 }
 
-button:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+::-webkit-scrollbar-thumb {
+  @apply bg-slate-700/50 rounded-full;
 }
 
-button:focus,
-button:focus-visible {
-  outline: 2px solid #3b82f6;
-  outline-offset: 2px;
+::-webkit-scrollbar-thumb:hover {
+  @apply bg-slate-600/80;
 }
 
-button:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-  transform: none;
+/* Utilities */
+.glass-panel {
+  @apply bg-slate-900/40 backdrop-blur-xl border border-white/5 shadow-xl;
 }
 
-input {
-  font-family: inherit;
+.glass-input {
+  @apply bg-slate-800/50 backdrop-blur-md border border-white/10 focus:border-blue-500/50 focus:ring-2 focus:ring-blue-500/20 transition-all;
 }
 
-input::placeholder {
-  opacity: 0.7;
+.animate-fade-in {
+  animation: fadeIn 0.3s ease-out forwards;
 }
 
-/* Selection styling */
-::selection {
-  background-color: rgba(59, 130, 246, 0.3);
-  color: white;
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(5px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
-/* Responsive design */
-@media (max-width: 768px) {
-  h1 {
-    font-size: 2em;
-  }
+.typing-dot {
+  animation: typing 1.4s infinite ease-in-out both;
+}
 
-  :root {
-    font-size: 14px;
-  }
+.typing-dot:nth-child(1) { animation-delay: -0.32s; }
+.typing-dot:nth-child(2) { animation-delay: -0.16s; }
+
+@keyframes typing {
+  0%, 80%, 100% { transform: scale(0); }
+  40% { transform: scale(1); }
 }
 
