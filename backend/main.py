@@ -5,6 +5,7 @@ from ingestion import process_pdf
 from pydantic import BaseModel
 from rag_engine import get_answer
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi import HTTPException
 
 class QuestionRequest(BaseModel):
     question: str
@@ -21,10 +22,19 @@ app.add_middleware(
 
 # Create a temporary directory for uploads
 UPLOAD_DIR = "temp_uploads"
+
+ALLOWED_EXTENSIONS = {".pdf", ".docx", ".doc", ".txt"}
+
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 @app.post("/upload")
 async def upload_pdf(file: UploadFile = File(...)):
+    ext = os.path.splitext(file.filename)[-1].lower()
+    if ext not in ALLOWED_EXTENSIONS:
+        raise HTTPException(
+            status_code=400, 
+            detail=f"File type {ext} not supported. Use PDF, DOCX, or TXT."
+        )
     # Save file locally first
     file_path = os.path.join(UPLOAD_DIR, file.filename)
     with open(file_path, "wb") as buffer:

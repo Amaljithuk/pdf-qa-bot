@@ -62,29 +62,80 @@ rag_chain = create_retrieval_chain(retriever, question_answer_chain)
 #         "sources": [doc.metadata.get("source") for doc in response["context"]]
 #     }
 def get_answer(question: str):
+    # First, get the chain's answer (keeps existing behavior)
     response = rag_chain.invoke({"input": question})
-    
-    # Extract page numbers and filenames with citations
-    sources = []
-    for doc in response["context"]:
-        page_num = doc.metadata.get("page", 0) + 1  # PyPDF is 0-indexed
-        source_file = doc.metadata.get("source", "Unknown")
-        # Extract just the filename from the path
-        filename = source_file.split("/")[-1] if source_file else "Unknown"
-        citation = f"{filename} (Page {page_num})"
-        sources.append(citation)
-    
-    # Keep only unique citations
-    unique_sources = list(set(sources))
-    
-    # Check if we have relevant sources
-    if not unique_sources:
-        return {
-            "answer": response["answer"] + " [Note: No relevant documents found in the uploaded PDFs]",
-            "sources": []
-        }
-    
-    return {
-        "answer": response["answer"],
-        "sources": unique_sources
-    }
+
+    # Try HyDE: generate a short hypothetical excerpt using the LLM,
+    # then use that hypothetical text to retrieve better sources from the vectorstore.
+    try:
+        # Build a concise HyDE prompt
+        hyde_prompt = (
+            "Write a concise factual excerpt (1-2 sentences) that would directly answer the "
+            f"question: \"{question}\". Provide only factual content, no commentary."
+        )
+
+        # Generate hypothetical excerpt (may return different shapes depending on LLM wrapper)
+        try:
+            hyde_resp = llm.invoke({"input": hyde_prompt})
+        except Exception:
+            # Some runtimes may implement __call__ instead
+            hyde_resp = llm(hyde_prompt)
+
+        # Extract text from possible response types
+        if isinstance(hyde_resp, dict):
+            hypo_text = hyde_resp.get("output") or hyde_resp.get("answer") or hyde_resp.get("text") or str(hyde_resp)
+        else:
+            hypo_text = str(hyde_resp)
+
+        # Defensive: truncate hypo_text if excessively long
+        hypo_text = (hypo_text or "").strip()
+        if not hypo_text:
+            raise ValueError("Empty HyDE output")
+
+        # Use the vectorstore's text-based similarity search with score to find documents
+        try:
+            # This will embed the hypo_text internally and return docs with scores
+            candidates = vectorstore.similarity_search_with_score(hypo_text, k=10)
+        except Exception:
+            # Fallback: use default retriever behavior if similarity_search_with_score not available
+            candidates = []
+
+        # Build citation list from candidates
+        sources = []
+        for doc_score in candidates:
+            # candidates may be list of (doc, score) or just docs
+            if isinstance(doc_score, tuple) and len(doc_score) >= 1:
+                doc = doc_score[0]
+            else:
+                doc = doc_score
+            page_num = doc.metadata.get("page", 0) + 1 if doc.metadata else 1
+            source_file = doc.metadata.get("source", "Unknown") if doc.metadata else "Unknown"
+            filename = source_file.split("/")[-1] if source_file else "Unknown"
+            sources.append(f"{filename} (Page {page_num})")
+
+        # De-duplicate and return
+        unique_sources = list(dict.fromkeys(sources))
+
+        if not unique_sources:
+            # No HyDE-retrieved sources; fall back to original context metadata
+            fallback_sources = []
+            for doc in response.get("context", []):
+                page_num = doc.metadata.get("page", 0) + 1 if doc.metadata else 1
+                source_file = doc.metadata.get("source", "Unknown") if doc.metadata else "Unknown"
+                filename = source_file.split("/")[-1] if source_file else "Unknown"
+                fallback_sources.append(f"{filename} (Page {page_num})")
+            unique_fallback = list(dict.fromkeys(fallback_sources))
+            return {"answer": response.get("answer", ""), "sources": unique_fallback}
+
+        return {"answer": response.get("answer", ""), "sources": unique_sources}
+
+    except Exception:
+        # On any HyDE failure, gracefully return the original rag_chain answer and its sources
+        sources = []
+        for doc in response.get("context", []):
+            page_num = doc.metadata.get("page", 0) + 1 if doc.metadata else 1
+            source_file = doc.metadata.get("source", "Unknown") if doc.metadata else "Unknown"
+            filename = source_file.split("/")[-1] if source_file else "Unknown"
+            sources.append(f"{filename} (Page {page_num})")
+        unique_sources = list(dict.fromkeys(sources))
+        return {"answer": response.get("answer", ""), "sources": unique_sources}

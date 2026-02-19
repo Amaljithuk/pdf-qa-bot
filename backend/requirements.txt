@@ -9,3 +9,4 @@ pypdf
 langchain_community
 langchain_pinecone
 langchain-classic
+python-docx
